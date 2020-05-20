@@ -9,3 +9,4 @@ keywords = ["locate"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+clap = "2.33"

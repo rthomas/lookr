@@ -9,4 +9,11 @@ keywords = ["locate"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+clap = "2.33"
 notify = "4.0"
+prost = "0.6"
+tokio = { version = "0.2", features = ["macros"] }
+tonic = "0.2"
+
+[build-dependencies]
+tonic-build = "0.2"

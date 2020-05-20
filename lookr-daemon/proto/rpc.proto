@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rpc;
+
+service Lookr {
+    rpc Query(QueryReq) returns (QueryResp);
+}
+
+message QueryReq {
+    string query = 1;
+    int32 count = 2;
+    int32 offset = 3;
+}
+
+message QueryResp {
+    repeated string results = 1;
+}
