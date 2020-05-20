@@ -1,0 +1,11 @@
+[package]
+name = "lookr"
+version = "0.1.0"
+authors = ["Ryan Thomas <ryan@ryant.org>"]
+edition = "2018"
+description = "Client binary for the lookrd daemon locate tool."
+license = "MIT"
+keywords = ["locate"]
+categories = ["command-line-utilities"]
+
+[dependencies]
