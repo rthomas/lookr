@@ -47,7 +47,13 @@ impl<'a> Indexer<'a> {
             for entry in walker {
                 match entry {
                     Ok(e) => {
-                        let path = e.into_path();
+                        let path = match e.into_path().canonicalize() {
+                            Ok(p) => p,
+                            Err(err) => {
+                                eprintln!("Could not canonicalize path: {}", err);
+                                continue;
+                            }
+                        };
                         let mut idx = self.index.lock().unwrap();
                         idx.insert(path.into())?;
                     }
