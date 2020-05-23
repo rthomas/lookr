@@ -30,8 +30,6 @@ impl Index {
     }
 
     pub fn insert(&mut self, entry: IndexItem) -> Result<(), IndexError> {
-        println!("INSERT: {:?}", entry);
-
         for k in &entry.keys {
             self.data
                 .entry(k.clone())

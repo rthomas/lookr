@@ -43,19 +43,14 @@ impl<'a> Indexer<'a> {
         // index all of the items that exist.
         for path in self.paths {
             // Don't follow symlinks.
+            let path = path.canonicalize()?;
             let walker = walkdir::WalkDir::new(path);
             for entry in walker {
                 match entry {
                     Ok(e) => {
-                        let path = match e.into_path().canonicalize() {
-                            Ok(p) => p,
-                            Err(err) => {
-                                eprintln!("Could not canonicalize path: {}", err);
-                                continue;
-                            }
-                        };
+                        let p = e.into_path();
                         let mut idx = self.index.lock().unwrap();
-                        idx.insert(path.into())?;
+                        idx.insert(p.into())?;
                     }
                     Err(e) => {
                         eprintln!("Walkdir Error: {}", e);
@@ -69,17 +64,17 @@ impl<'a> Indexer<'a> {
         loop {
             match rx.recv() {
                 Ok(WatchEvent::Create(pb)) => {
-                    println!("CREATE: {:?}", pb);
+                    // println!("CREATE: {:?}", pb);
                     let mut idx = self.index.lock().unwrap();
                     idx.insert(pb.into())?;
                 }
                 Ok(WatchEvent::Remove(pb)) => {
-                    println!("REMOVE: {:?}", pb);
+                    // println!("REMOVE: {:?}", pb);
                     let mut idx = self.index.lock().unwrap();
                     idx.remove(pb.into())?;
                 }
                 Ok(WatchEvent::Rename(pb_src, pb_dst)) => {
-                    println!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
+                    // println!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
                     let mut idx = self.index.lock().unwrap();
                     idx.remove(pb_src.into())?;
                     idx.insert(pb_dst.into())?;
