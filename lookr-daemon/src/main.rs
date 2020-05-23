@@ -71,6 +71,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Plan: What needs to happen before we index things:
+    // 1. We need to get a list of the users on the system
+    // 2. We generate a user read-only sercret key for them
+    // 3. Add an endpoint for a request to get a local path for the key for a given user
+    // 4. Add the key requirement to the query to authenticate the request.
+    // 5. Also index the file permissions to make sure we filter the correct files out.
+
     let index = Arc::new(Mutex::new(index::Index::new()));
     let idx_clone = index.clone();
 
