@@ -1,11 +1,32 @@
+mod index;
+mod indexer;
 mod proto;
 mod rpc;
 
 use crate::proto::rpc::lookr_server::LookrServer;
 use clap::{App, AppSettings, Arg};
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{self, BufReader};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use tonic::transport::Server;
 
 static DEFAULT_ADDR: &str = "[::1]:50051";
+static DEFAULT_CONFIG: &str = ".lookrd";
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct LookrdConfig {
+    index_paths: Vec<String>,
+    data_dir: String,
+}
+
+fn read_config(cfg: &Path) -> io::Result<LookrdConfig> {
+    let reader = BufReader::new(File::open(cfg)?);
+    let config = serde_json::from_reader(reader)?;
+    Ok(config)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,11 +60,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .global(true),
         )
         .get_matches();
-    
-    let addr = matches.value_of("addr").unwrap_or(DEFAULT_ADDR).parse()?;
-    let lookr = rpc::LookrService::new();
 
-    Server::builder().add_service(LookrServer::new(lookr)).serve(addr).await?;
-    
+    let addr = matches.value_of("addr").unwrap_or(DEFAULT_ADDR).parse()?;
+    let config = match matches.value_of("config") {
+        Some(c) => read_config(Path::new(c))?,
+        None => {
+            let mut home = dirs::home_dir().expect("No home directory found...");
+            home.push(DEFAULT_CONFIG);
+            read_config(home.as_path())?
+        }
+    };
+
+    let index = Arc::new(Mutex::new(index::Index::new()));
+    let idx_clone = index.clone();
+
+    let idx_thread = thread::spawn(move || {
+        let mut paths = Vec::with_capacity(config.index_paths.len());
+        for p in &config.index_paths {
+            paths.push(Path::new(p));
+        }
+        let mut indexer =
+            indexer::Indexer::new(idx_clone, Path::new(&config.data_dir), &paths).unwrap();
+        indexer.index().expect("This will only terminate on error.");
+    });
+
+    // RPC service and server.
+    let lookr = rpc::LookrService::new(index.clone());
+    Server::builder()
+        .add_service(LookrServer::new(lookr))
+        .serve(addr)
+        .await?;
+
+    idx_thread.join().expect("Could not join indexer thread");
+
     Ok(())
 }

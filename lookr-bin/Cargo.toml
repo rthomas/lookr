@@ -9,4 +9,8 @@ keywords = ["locate"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+lookrd =  { path = "../lookr-daemon" }  
+
 clap = "2.33"
+tokio = { version = "0.2", features = ["macros"] }
+tonic = "0.2"
