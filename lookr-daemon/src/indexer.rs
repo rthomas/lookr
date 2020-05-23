@@ -222,7 +222,9 @@ mod test {
     use super::*;
     #[test]
     fn test_indexer() {
-        return; // This was just for testing the indexer interactively.
+        if true {
+            return;
+        }; // This was just for testing the indexer interactively.
         let paths = vec![Path::new("src")];
 
         let idx = Arc::new(Mutex::new(Index::new()));
