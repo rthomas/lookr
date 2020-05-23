@@ -85,8 +85,6 @@ pub(crate) struct IndexItem {
 
 impl From<PathBuf> for IndexItem {
     fn from(pb: PathBuf) -> Self {
-        // let pb = p.canonicalize().expect("Could not canonicalize the path.");
-
         let mut keys = Vec::new();
         for c in pb.components() {
             match c {

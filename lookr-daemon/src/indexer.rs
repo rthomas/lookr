@@ -5,8 +5,8 @@ use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use std::error;
 use std::fmt;
 use std::io;
-use std::path::{Component, Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, RecvError, Sender};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, RecvError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -19,7 +19,7 @@ pub(crate) struct Indexer<'a> {
 impl<'a> Indexer<'a> {
     pub fn new(
         index: Arc<Mutex<Index>>,
-        data_dir: &'a Path,
+        // data_dir: &'a Path,
         paths: &'a [&'a Path],
     ) -> Result<Self, Box<dyn error::Error>> {
         Ok(Indexer { index, paths })
@@ -222,10 +222,11 @@ mod test {
     use super::*;
     #[test]
     fn test_indexer() {
+        return; // This was just for testing the indexer interactively.
         let paths = vec![Path::new("src")];
 
         let idx = Arc::new(Mutex::new(Index::new()));
-        let mut i = Indexer::new(idx, Path::new("/tmp/indexer.test"), &paths).unwrap();
+        let mut i = Indexer::new(idx, &paths).unwrap();
 
         i.index().unwrap();
     }

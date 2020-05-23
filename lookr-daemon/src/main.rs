@@ -79,8 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for p in &config.index_paths {
             paths.push(Path::new(p));
         }
-        let mut indexer =
-            indexer::Indexer::new(idx_clone, Path::new(&config.data_dir), &paths).unwrap();
+        let mut indexer = indexer::Indexer::new(idx_clone, &paths).unwrap();
         indexer.index().expect("This will only terminate on error.");
     });
 
