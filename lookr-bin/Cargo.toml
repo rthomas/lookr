@@ -9,7 +9,7 @@ keywords = ["locate"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-lookrd =  { path = "../lookr-daemon" }  
+lookrd =  { path = "../lookr-daemon", version = "0.1.1"}  
 
 clap = "2.33"
 tokio = { version = "0.2", features = ["macros"] }
