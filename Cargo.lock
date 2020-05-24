@@ -437,17 +437,17 @@ dependencies = [
 
 [[package]]
 name = "lookr"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap 2.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lookrd 0.1.0",
+ "lookrd 0.1.1",
  "tokio 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "lookrd"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap 2.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",

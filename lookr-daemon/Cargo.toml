@@ -1,6 +1,6 @@
 [package]
 name = "lookrd"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ryan Thomas <ryan@ryant.org>"]
 edition = "2018"
 description = "Lookr daemon for the lookr locate service."

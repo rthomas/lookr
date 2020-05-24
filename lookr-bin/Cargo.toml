@@ -1,6 +1,6 @@
 [package]
 name = "lookr"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ryan Thomas <ryan@ryant.org>"]
 edition = "2018"
 description = "Client binary for the lookrd daemon locate tool."
