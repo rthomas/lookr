@@ -3,6 +3,9 @@ mod indexer;
 mod proto;
 mod rpc;
 
+#[macro_use]
+extern crate log;
+
 use crate::proto::rpc::lookr_server::LookrServer;
 use clap::{App, AppSettings, Arg};
 use serde::{Deserialize, Serialize};
@@ -18,8 +21,13 @@ static DEFAULT_CONFIG: &str = ".lookrd";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct LookrdConfig {
+    /// The paths that will be indexed by the indexer.
     index_paths: Vec<String>,
+    /// The location this data will be written to.
     data_dir: String,
+    // Optional list of users to generate secrets for, if not provided will
+    // generate them for all users.
+    users: Option<String>,
 }
 
 fn read_config(cfg: &Path) -> io::Result<LookrdConfig> {
@@ -30,6 +38,10 @@ fn read_config(cfg: &Path) -> io::Result<LookrdConfig> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    pretty_env_logger::init();
+
+    info!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .setting(AppSettings::ColoredHelp)
         .version(env!("CARGO_PKG_VERSION"))
@@ -78,9 +90,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Add the key requirement to the query to authenticate the request.
     // 5. Also index the file permissions to make sure we filter the correct files out.
 
+    info!("Creating index");
     let index = Arc::new(Mutex::new(index::Index::new()));
     let idx_clone = index.clone();
 
+    info!("Starting indexer thread");
     let idx_thread = thread::spawn(move || {
         let mut paths = Vec::with_capacity(config.index_paths.len());
         for p in &config.index_paths {
@@ -90,6 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         indexer.index().expect("This will only terminate on error.");
     });
 
+    info!("Starting RPC server");
     // RPC service and server.
     let lookr = rpc::LookrService::new(index.clone());
     Server::builder()

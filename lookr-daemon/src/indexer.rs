@@ -27,21 +27,21 @@ impl<'a> Indexer<'a> {
 
     /// Build the index for the given locations.
     pub fn index(&mut self) -> Result<(), IndexerError> {
-        // Start the indexing process
-
         let (tx, rx) = channel();
 
+        info!("Starting FsWatcher thread");
         let w = FsWatcher::new(tx, self.paths)?;
         thread::spawn(move || {
             // This should not return.
             match w.watch() {
                 Ok(_) => (),
-                Err(e) => eprintln!("Error on watcher thread: {}", e),
+                Err(e) => error!("Error on watcher thread: {}", e),
             }
         });
 
         // index all of the items that exist.
         for path in self.paths {
+            info!("Starting index of: {}", path.to_string_lossy());
             // Don't follow symlinks.
             let path = path.canonicalize()?;
             let walker = walkdir::WalkDir::new(path);
@@ -49,38 +49,41 @@ impl<'a> Indexer<'a> {
                 match entry {
                     Ok(e) => {
                         let p = e.into_path();
+                        debug!("Indexing: {:?}", p);
                         let mut idx = self.index.lock().unwrap();
                         idx.insert(p.into())?;
                     }
                     Err(e) => {
-                        eprintln!("Walkdir Error: {}", e);
+                        error!("Walkdir Error: {}", e);
                         return Err(IndexerError::WalkerError);
                     }
                 }
             }
+            info!("Indexing complete");
         }
 
+        info!("Indexer watching for change events...");
         // Wait for watcher events and index those.
         loop {
             match rx.recv() {
                 Ok(WatchEvent::Create(pb)) => {
-                    // println!("CREATE: {:?}", pb);
+                    debug!("CREATE: {:?}", pb);
                     let mut idx = self.index.lock().unwrap();
                     idx.insert(pb.into())?;
                 }
                 Ok(WatchEvent::Remove(pb)) => {
-                    // println!("REMOVE: {:?}", pb);
+                    debug!("REMOVE: {:?}", pb);
                     let mut idx = self.index.lock().unwrap();
                     idx.remove(pb.into())?;
                 }
                 Ok(WatchEvent::Rename(pb_src, pb_dst)) => {
-                    // println!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
+                    debug!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
                     let mut idx = self.index.lock().unwrap();
                     idx.remove(pb_src.into())?;
                     idx.insert(pb_dst.into())?;
                 }
                 Err(e) => {
-                    eprintln!("Error from the RX channel for the FsWatcher: {}", e);
+                    error!("Error from the RX channel for the FsWatcher: {}", e);
                     return Err(IndexerError::WatcherRxError(e));
                 }
             }
@@ -201,10 +204,10 @@ impl<'a> FsWatcher {
                     self.tx.send(WatchEvent::Rename(pb_src, pb_dst))?;
                 }
                 Ok(event) => {
-                    println!("Watcher: Other event: {:?}", event);
+                    debug!("Watcher: Other event: {:?}", event);
                 }
                 Err(e) => {
-                    eprintln!("Error on watcher channel: {}", e);
+                    error!("Error on watcher channel: {}", e);
                     return Err(Box::new(WatcherError::NotifyError(e)));
                 }
             }

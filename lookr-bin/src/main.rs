@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let resp = client.query(req).await?;
 
     for r in &resp.get_ref().results {
-        println!("Result: {}", r);
+        println!("{}", r);
     }
 
     Ok(())
