@@ -30,6 +30,7 @@ impl Lookr for LookrService {
             }
         };
 
+        debug!("Query: {:?} => {} results", query, results.len());
         let resp = QueryResp { results };
 
         Ok(Response::new(resp))

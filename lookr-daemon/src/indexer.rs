@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub(crate) struct Indexer<'a> {
     index: Arc<Mutex<Index>>,
@@ -41,8 +41,10 @@ impl<'a> Indexer<'a> {
 
         // index all of the items that exist.
         for path in self.paths {
-            info!("Starting index of: {}", path.to_string_lossy());
-            // Don't follow symlinks.
+            let start = Instant::now();
+            let path_str = path.to_string_lossy();
+            info!("Starting index of: {}", path_str);
+
             let path = path.canonicalize()?;
             let walker = walkdir::WalkDir::new(path);
             for entry in walker {
@@ -59,7 +61,12 @@ impl<'a> Indexer<'a> {
                     }
                 }
             }
-            info!("Indexing complete");
+            let duration = start.elapsed();
+            info!(
+                "Indexing complete for: {} in {}s",
+                path_str,
+                duration.as_secs()
+            );
         }
 
         info!("Indexer watching for change events...");
