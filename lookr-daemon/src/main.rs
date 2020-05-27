@@ -101,7 +101,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             paths.push(Path::new(p));
         }
         let mut indexer = indexer::Indexer::new(idx_clone, &paths).unwrap();
-        indexer.index().expect("This will only terminate on error.");
+        indexer
+            .index()
+            .expect("Indexer thread terminating on error");
     });
 
     info!("Starting RPC server");

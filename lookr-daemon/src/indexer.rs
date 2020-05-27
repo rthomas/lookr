@@ -45,7 +45,6 @@ impl<'a> Indexer<'a> {
             let path_str = path.to_string_lossy();
             info!("Starting index of: {}", path_str);
 
-            let path = path.canonicalize()?;
             let walker = walkdir::WalkDir::new(path);
             for entry in walker {
                 match entry {
@@ -57,7 +56,6 @@ impl<'a> Indexer<'a> {
                     }
                     Err(e) => {
                         error!("Walkdir Error: {}", e);
-                        return Err(IndexerError::WalkerError);
                     }
                 }
             }
@@ -108,7 +106,6 @@ impl Drop for Indexer<'_> {
 pub enum IndexerError {
     IoError(io::Error),
     Index(IndexError),
-    WalkerError,
     WatcherRxError(RecvError),
     Watcher(WatcherError),
 }
@@ -196,7 +193,13 @@ impl<'a> FsWatcher {
         let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
 
         for path in &self.paths {
-            watcher.watch(path, RecursiveMode::Recursive)?;
+            match watcher.watch(path, RecursiveMode::Recursive) {
+                Err(e) => error!(
+                    "Error attempting to watch {:?}, this path will not be watched for updates: {}",
+                    path, e
+                ),
+                _ => (),
+            }
         }
 
         loop {
