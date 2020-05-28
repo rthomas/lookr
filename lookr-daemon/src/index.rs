@@ -17,7 +17,7 @@ impl fmt::Display for IndexError {
 
 #[derive(Debug)]
 pub(crate) struct Index {
-    data: HashMap<String, HashSet<String>>,
+    data: HashMap<String, HashSet<IndexItem>>,
 }
 
 impl Index {
@@ -34,7 +34,7 @@ impl Index {
             self.data
                 .entry(k.clone())
                 .or_insert(HashSet::new())
-                .insert(entry.value.clone());
+                .insert(entry.clone());
         }
 
         Ok(())
@@ -43,7 +43,7 @@ impl Index {
     pub fn remove(&mut self, entry: IndexItem) -> Result<(), IndexError> {
         for k in &entry.keys {
             if let Some(v) = self.data.get_mut(k) {
-                v.remove(&entry.value);
+                v.remove(&entry);
                 if v.is_empty() {
                     self.data.remove(k);
                 }
@@ -60,8 +60,8 @@ impl Index {
             if k.contains(q) {
                 let rs = self.data.get(k).unwrap();
                 for v in rs {
-                    // TODO: FInd a better way than cloning out the strings...
-                    r.insert(v.clone());
+                    // TODO: Find a better way than cloning out the strings...
+                    r.insert(v.value.clone());
                 }
             }
         }
