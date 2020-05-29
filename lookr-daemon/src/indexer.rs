@@ -1,28 +1,46 @@
 //! Watcher for FS changes and updates the corpus.
 
-use crate::index::{Index, IndexError};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use std::error;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvError, Sender};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tantivy::schema::{Schema, STORED, TEXT};
+use tantivy::{Document, Index, TantivyError, Term};
+
+pub static FIELD_PATH: &str = "path";
+pub static FIELD_EXT: &str = "ext";
+pub static FIELD_FILENAME: &str = "filename";
 
 pub(crate) struct Indexer<'a> {
-    index: Arc<Mutex<Index>>,
+    index: Index,
+    schema: Schema,
     paths: &'a [&'a Path],
+}
+
+pub fn build_schema() -> Schema {
+    let mut schema_builder = Schema::builder();
+    schema_builder.add_text_field(FIELD_PATH, TEXT | STORED);
+    schema_builder.add_text_field(FIELD_EXT, TEXT);
+    schema_builder.add_text_field(FIELD_FILENAME, TEXT);
+
+    schema_builder.build()
 }
 
 impl<'a> Indexer<'a> {
     pub fn new(
-        index: Arc<Mutex<Index>>,
-        // data_dir: &'a Path,
+        index: Index,
+        schema: Schema,
         paths: &'a [&'a Path],
     ) -> Result<Self, Box<dyn error::Error>> {
-        Ok(Indexer { index, paths })
+        Ok(Indexer {
+            index,
+            schema,
+            paths,
+        })
     }
 
     /// Build the index for the given locations.
@@ -39,6 +57,25 @@ impl<'a> Indexer<'a> {
             }
         });
 
+        let mut index_writer = self.index.writer_with_num_threads(1, 50_000_000)?;
+        let field_path = self.schema.get_field(FIELD_PATH).unwrap();
+        let field_ext = self.schema.get_field(FIELD_EXT).unwrap();
+        let field_filename = self.schema.get_field(FIELD_FILENAME).unwrap();
+
+        let index_pathbuf = |p: &PathBuf| {
+            let mut doc = Document::new();
+            doc.add_text(field_path, &p.to_string_lossy());
+            match p.extension() {
+                Some(s) => doc.add_text(field_ext, &s.to_string_lossy()),
+                None => (),
+            }
+            match p.file_name() {
+                Some(s) => doc.add_text(field_filename, &s.to_string_lossy()),
+                None => (),
+            }
+            doc
+        };
+
         // index all of the items that exist.
         for path in self.paths {
             let start = Instant::now();
@@ -51,14 +88,15 @@ impl<'a> Indexer<'a> {
                     Ok(e) => {
                         let p = e.into_path();
                         debug!("Indexing: {:?}", p);
-                        let mut idx = self.index.lock().unwrap();
-                        idx.insert(p.into())?;
+                        index_writer.add_document(index_pathbuf(&p));
                     }
                     Err(e) => {
                         error!("Walkdir Error: {}", e);
                     }
                 }
             }
+            debug!("Commiting the index.");
+            index_writer.commit()?;
             let duration = start.elapsed();
             info!(
                 "Indexing complete for: {} in {}s",
@@ -72,20 +110,33 @@ impl<'a> Indexer<'a> {
         loop {
             match rx.recv() {
                 Ok(WatchEvent::Create(pb)) => {
+                    // TODO: Find a way to generalize the conversion from PathBuf to Document
                     debug!("CREATE: {:?}", pb);
-                    let mut idx = self.index.lock().unwrap();
-                    idx.insert(pb.into())?;
+                    index_writer.add_document(index_pathbuf(&pb));
+                    match index_writer.commit() {
+                        Ok(_) => (),
+                        Err(e) => error!("Could not commit IndexWriter: {}", e),
+                    }
                 }
                 Ok(WatchEvent::Remove(pb)) => {
-                    debug!("REMOVE: {:?}", pb);
-                    let mut idx = self.index.lock().unwrap();
-                    idx.remove(pb.into())?;
+                    info!("REMOVE: {:?}", pb);
+                    // TODO: This is not working - the document is still in the index...
+                    let term = Term::from_field_text(field_path, &pb.to_string_lossy());
+                    index_writer.delete_term(term);
+                    match index_writer.commit() {
+                        Ok(_) => (),
+                        Err(e) => error!("Could not commit IndexWriter: {}", e),
+                    }
                 }
                 Ok(WatchEvent::Rename(pb_src, pb_dst)) => {
                     debug!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
-                    let mut idx = self.index.lock().unwrap();
-                    idx.remove(pb_src.into())?;
-                    idx.insert(pb_dst.into())?;
+                    let term = Term::from_field_text(field_path, &pb_src.to_string_lossy());
+                    index_writer.delete_term(term);
+                    index_writer.add_document(index_pathbuf(&pb_dst));
+                    match index_writer.commit() {
+                        Ok(_) => (),
+                        Err(e) => error!("Could not commit IndexWriter: {}", e),
+                    }
                 }
                 Err(e) => {
                     error!("Error from the RX channel for the FsWatcher: {}", e);
@@ -105,7 +156,7 @@ impl Drop for Indexer<'_> {
 #[derive(Debug)]
 pub enum IndexerError {
     IoError(io::Error),
-    Index(IndexError),
+    Tantivy(TantivyError),
     WatcherRxError(RecvError),
     Watcher(WatcherError),
 }
@@ -125,15 +176,15 @@ impl From<WatcherError> for IndexerError {
     }
 }
 
-impl From<IndexError> for IndexerError {
-    fn from(e: IndexError) -> Self {
-        IndexerError::Index(e)
-    }
-}
-
 impl From<io::Error> for IndexerError {
     fn from(e: io::Error) -> Self {
         IndexerError::IoError(e)
+    }
+}
+
+impl From<TantivyError> for IndexerError {
+    fn from(e: TantivyError) -> Self {
+        IndexerError::Tantivy(e)
     }
 }
 
@@ -228,18 +279,6 @@ impl<'a> FsWatcher {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_indexer() {
-        if true {
-            return;
-        }; // This was just for testing the indexer interactively.
-        let paths = vec![Path::new("src")];
-
-        let idx = Arc::new(Mutex::new(Index::new()));
-        let mut i = Indexer::new(idx, &paths).unwrap();
-
-        i.index().unwrap();
-    }
 
     #[test]
     fn test_pb() {

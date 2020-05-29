@@ -1,4 +1,3 @@
-mod index;
 mod indexer;
 mod proto;
 mod rpc;
@@ -12,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{self, BufReader};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use std::thread;
+use tantivy::Index;
 use tonic::transport::Server;
 
 static DEFAULT_ADDR: &str = "[::1]:50051";
@@ -91,8 +90,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Also index the file permissions to make sure we filter the correct files out.
 
     info!("Creating index");
-    let index = Arc::new(Mutex::new(index::Index::new()));
-    let idx_clone = index.clone();
+    let schema = indexer::build_schema();
+    let schema_indexer = schema.clone();
+    let schema_lookr = schema.clone();
+    let index = Index::create_in_ram(schema);
+    let index_lookr = index.clone();
 
     info!("Starting indexer thread");
     let idx_thread = thread::spawn(move || {
@@ -100,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for p in &config.index_paths {
             paths.push(Path::new(p));
         }
-        let mut indexer = indexer::Indexer::new(idx_clone, &paths).unwrap();
+        let mut indexer = indexer::Indexer::new(index, schema_indexer, &paths).unwrap();
         indexer
             .index()
             .expect("Indexer thread terminating on error");
@@ -108,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting RPC server");
     // RPC service and server.
-    let lookr = rpc::LookrService::new(index.clone());
+    let lookr = rpc::LookrService::new(index_lookr, schema_lookr);
     Server::builder()
         .add_service(LookrServer::new(lookr))
         .serve(addr)
