@@ -26,7 +26,9 @@ pub fn build_schema() -> Schema {
     let mut schema_builder = Schema::builder();
     // The path is the ID for the document, type STRING will ensure it is not tokenized.
     schema_builder.add_text_field(FIELD_ID, STRING);
+    // We also tokenize the path and store it, so that we can report it in the results.
     schema_builder.add_text_field(FIELD_PATH, TEXT | STORED);
+    // Whilst extension and filename are part of the path, we're also adding them here.
     schema_builder.add_text_field(FIELD_EXT, TEXT);
     schema_builder.add_text_field(FIELD_FILENAME, TEXT);
 
