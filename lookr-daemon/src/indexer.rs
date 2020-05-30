@@ -8,9 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvError, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
-use tantivy::schema::{Schema, STORED, TEXT};
+use tantivy::schema::{Schema, STORED, STRING, TEXT};
 use tantivy::{Document, Index, TantivyError, Term};
 
+pub static FIELD_ID: &str = "file_id";
 pub static FIELD_PATH: &str = "path";
 pub static FIELD_EXT: &str = "ext";
 pub static FIELD_FILENAME: &str = "filename";
@@ -23,6 +24,8 @@ pub(crate) struct Indexer<'a> {
 
 pub fn build_schema() -> Schema {
     let mut schema_builder = Schema::builder();
+    // The path is the ID for the document, type STRING will ensure it is not tokenized.
+    schema_builder.add_text_field(FIELD_ID, STRING);
     schema_builder.add_text_field(FIELD_PATH, TEXT | STORED);
     schema_builder.add_text_field(FIELD_EXT, TEXT);
     schema_builder.add_text_field(FIELD_FILENAME, TEXT);
@@ -58,12 +61,14 @@ impl<'a> Indexer<'a> {
         });
 
         let mut index_writer = self.index.writer_with_num_threads(1, 50_000_000)?;
+        let field_id = self.schema.get_field(FIELD_ID).unwrap();
         let field_path = self.schema.get_field(FIELD_PATH).unwrap();
         let field_ext = self.schema.get_field(FIELD_EXT).unwrap();
         let field_filename = self.schema.get_field(FIELD_FILENAME).unwrap();
 
         let from_pathbuf = |p: &PathBuf| {
             let mut doc = Document::new();
+            doc.add_text(field_id, &p.to_string_lossy());
             doc.add_text(field_path, &p.to_string_lossy());
             match p.extension() {
                 Some(s) => doc.add_text(field_ext, &s.to_string_lossy()),
@@ -130,14 +135,13 @@ impl<'a> Indexer<'a> {
                 }
                 Ok(WatchEvent::Remove(pb)) => {
                     debug!("REMOVE: {:?}", pb);
-                    // TODO: This is not working - the document is still in the index...
-                    let term = Term::from_field_text(field_path, &pb.to_string_lossy());
+                    let term = Term::from_field_text(field_id, &pb.to_string_lossy());
                     index_writer.delete_term(term);
                     counter += 1;
                 }
                 Ok(WatchEvent::Rename(pb_src, pb_dst)) => {
                     debug!("RENAME: {:?} -> {:?}", pb_src, pb_dst);
-                    let term = Term::from_field_text(field_path, &pb_src.to_string_lossy());
+                    let term = Term::from_field_text(field_id, &pb_src.to_string_lossy());
                     index_writer.delete_term(term);
                     index_writer.add_document(from_pathbuf(&pb_dst));
                     counter += 1;
@@ -326,13 +330,12 @@ mod test {
         use tantivy::{doc, Index};
 
         let mut schema_builder = Schema::builder();
-        let title = schema_builder.add_text_field("title", TEXT | STORED);
+        let title = schema_builder.add_text_field("doc_id", STRING | STORED);
         let schema = schema_builder.build();
 
         let index = Index::create_in_ram(schema.clone());
 
-        let title_str = "The modern Promotheus";
-        let query_str = "Promotheus";
+        let title_str = "/foo/bar/baz";
 
         let mut index_writer = index.writer_with_num_threads(1, 50_000_000).unwrap();
         index_writer.add_document(doc!(title => title_str));
@@ -340,7 +343,7 @@ mod test {
 
         let searcher = index.reader().unwrap().searcher();
         let query_parser = QueryParser::for_index(&index, vec![title]);
-        let query_promo = query_parser.parse_query(query_str).unwrap();
+        let query_promo = query_parser.parse_query(title_str).unwrap();
         let top_docs_promo = searcher
             .search(&query_promo, &TopDocs::with_limit(1))
             .unwrap();
@@ -351,8 +354,11 @@ mod test {
         index_writer.delete_term(term);
         index_writer.commit().unwrap();
 
-        let query_promo2 = query_parser.parse_query(query_str).unwrap();
-        let top_docs_promo2 = searcher
+        let reader = index.reader().unwrap();
+        reader.reload().unwrap();
+        let searcher2 = reader.searcher();
+        let query_promo2 = query_parser.parse_query(title_str).unwrap();
+        let top_docs_promo2 = searcher2
             .search(&query_promo2, &TopDocs::with_limit(1))
             .unwrap();
 
