@@ -1,5 +1,5 @@
 use crate::proto::rpc::lookr_server::Lookr;
-use crate::proto::rpc::{QueryReq, QueryResp};
+use crate::proto::rpc::{QueryReq, QueryResp, SecretPathReq, SecretPathResp};
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::{Field, Schema};
@@ -83,5 +83,12 @@ impl Lookr for LookrService {
         let resp = QueryResp { results };
 
         Ok(Response::new(resp))
+    }
+
+    async fn get_secret_path(
+        &self,
+        req: Request<SecretPathReq>,
+    ) -> Result<Response<SecretPathResp>, Status> {
+        todo!()
     }
 }

@@ -1,6 +1,7 @@
 mod indexer;
 mod proto;
 mod rpc;
+mod secret;
 
 #[macro_use]
 extern crate log;

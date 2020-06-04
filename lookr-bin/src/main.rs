@@ -42,6 +42,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let mut client = LookrClient::connect(format!("http://{}", server)).await?;
 
     let req = Request::new(QueryReq {
+        secret: String::new(),
         query: query.to_string(),
         count: 0,
         offset: 0,

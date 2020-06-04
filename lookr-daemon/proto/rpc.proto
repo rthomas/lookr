@@ -4,14 +4,30 @@ package rpc;
 
 service Lookr {
     rpc Query(QueryReq) returns (QueryResp);
+    
+    // Due to the way this works (local http server) we want to make sure that
+    // the user is who they say they are. We do this by having a seret key in a
+    // file only that user can read, and using that to validate the users
+    // request. The function will return a path to a file for the given user,
+    // containing the secret key needed to make other calls.
+    rpc GetSecretPath(SecretPathReq) returns (SecretPathResp);
 }
 
 message QueryReq {
-    string query = 1;
-    int32 count = 2;
-    int32 offset = 3;
+    string secret = 1;
+    string query = 2;
+    int32 count = 3;
+    int32 offset = 4;
 }
 
 message QueryResp {
     repeated string results = 1;
+}
+
+message SecretPathReq {
+    string user = 1;
+}
+
+message SecretPathResp {
+    string path = 1;
 }
